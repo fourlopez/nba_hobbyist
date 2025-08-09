@@ -35,9 +35,6 @@ def read_uploaded(file, sheet=None) -> pd.DataFrame:
             return pd.DataFrame({"content": content.splitlines()})
     raise ValueError(f"Unsupported file type: {name}")
 
-# ---------- Trends (compound line) ----------
-
-
 CATEGORY_COLS = ["Player", "Team", "Pos", "Year"]
 METRIC_COLS = [
     "G","GS","MP","FG","FGA","FG%","3P","3PA","3P%","2P","2PA","2P%","eFG%",
@@ -47,83 +44,72 @@ METRIC_COLS = [
 def build_trend_ui(df: pd.DataFrame):
     st.subheader("Trends")
 
-    # --- Filters ---
-    c1, c2, c3, c4 = st.columns([1.2, 1, 1, 1])
-    with c1:
-        players = st.multiselect("Player(s)", sorted(df["Player"].dropna().unique().tolist()))
-    with c2:
-        teams = st.multiselect("Team(s)", sorted(df["Team"].dropna().unique().tolist()))
-    with c3:
-        pos = st.multiselect("Pos", sorted(df["Pos"].dropna().unique().tolist()))
-    with c4:
-        yr_min, yr_max = int(df["Year"].min()), int(df["Year"].max())
-        years = st.slider("Year range", yr_min, yr_max, (yr_min, yr_max))
+    # ---------- Row 1: Year slider ----------
+    yrs = pd.to_numeric(df["Year"], errors="coerce").dropna()
+    yr_min, yr_max = int(yrs.min()), int(yrs.max())
+    years = st.slider("Year range", yr_min, yr_max, (yr_min, yr_max))
 
-    # apply filters
+    # ---------- Row 2: Team / Pos ----------
+    r2c1, r2c2 = st.columns(2)
+    with r2c1:
+        teams = st.multiselect("Team(s)", sorted(df["Team"].dropna().unique().tolist()))
+    with r2c2:
+        pos = st.multiselect("Pos", sorted(df["Pos"].dropna().unique().tolist()))
+
+    # ---------- Row 3: Player / Metrics (checkbox grid) ----------
+    r3c1, r3c2 = st.columns([1, 1])
+    with r3c1:
+        players = st.multiselect("Player(s)", sorted(df["Player"].dropna().unique().tolist()))
+
+    with r3c2:
+        st.markdown("**Metrics**")
+        grid = st.columns(3)
+        sel_metrics = []
+        for i, m in enumerate(METRIC_COLS):
+            default = (m == "PTS")
+            if grid[i % 3].checkbox(m, value=default, key=f"metric_{m}"):
+                sel_metrics.append(m)
+
+    # ---------- Filtering ----------
     f = df.copy()
-    if players: f = f[f["Player"].isin(players)]
     if teams:   f = f[f["Team"].isin(teams)]
     if pos:     f = f[f["Pos"].isin(pos)]
-    f = f[(f["Year"] >= years[0]) & (f["Year"] <= years[1])]
-
-    # --- Metrics & options ---
-    m1, m2, m3, m4 = st.columns([1.4, 1, 1, 1])
-    with m1:
-        sel_metrics = st.multiselect("Metrics", METRIC_COLS, default=["PTS"])
-    with m2:
-        by_player = st.checkbox("One chart per player (facet)", value=len(players) > 1)
-    with m3:
-        normalize = st.checkbox("Normalize metrics", value=False,
-                                help="Min-max per metric (0-1) so different scales compare.")
-    with m4:
-        ma = st.checkbox("Moving average", value=False)
-    if ma:
-        win = st.number_input("MA window", min_value=2, max_value=20, value=3, step=1)
+    if players: f = f[f["Player"].isin(players)]
+    f = f[(pd.to_numeric(f["Year"], errors="coerce") >= years[0]) &
+          (pd.to_numeric(f["Year"], errors="coerce") <= years[1])]
 
     if not sel_metrics:
-        st.info("Select at least one metric to draw.")
+        st.info("Select at least one metric (right panel).")
         return
-
     if f.empty:
         st.warning("No data for the chosen filters.")
         return
 
-    # keep needed cols, cast Year to int
-    f = f[CATEGORY_COLS + sel_metrics].copy()
-    f["Year"] = f["Year"].astype(int)
+    sel_metrics = [m for m in sel_metrics if m in f.columns]
+    if not sel_metrics:
+        st.warning("Selected metrics are not present in the dataset.")
+        return
 
-    # melt to long for multi-metric compound lines
+    # keep needed cols; cast numerics
+    f = f[CATEGORY_COLS + sel_metrics].copy()
+    f["Year"] = pd.to_numeric(f["Year"], errors="coerce").astype("Int64")
+    for m in sel_metrics:
+        f[m] = pd.to_numeric(f[m], errors="coerce")
+
+    # long format for compound lines
     long = f.melt(id_vars=["Year","Player","Team","Pos"],
                   value_vars=sel_metrics, var_name="Metric", value_name="Value")
 
-    # normalize per metric (and optionally per player)
-    if normalize:
-        long["Value"] = long.groupby(["Metric"])["Value"].transform(
-            lambda s: (s - s.min()) / (s.max() - s.min()) if s.max() > s.min() else 0.0
-        )
-
-    # optional moving average per player+metric (and year-sorted)
-    if ma:
-        long = long.sort_values(["Player","Metric","Year"])
-        long["Value"] = long.groupby(["Player","Metric"], dropna=False)["Value"] \
-                            .transform(lambda s: s.rolling(win, min_periods=1).mean())
-
-    # Build figure
-    # color = Metric (compound lines); facet by Player if requested and >1 players
-    facet = "Player" if by_player and long["Player"].nunique() > 1 else None
-
+    # single compound line chart (no facets, no options)
     fig = px.line(
         long,
         x="Year", y="Value",
         color="Metric",
-        facet_col=facet,
-        facet_col_wrap=2 if facet else None,
         markers=True
     )
-    fig.update_layout(height=500 if not facet else 500 + 200 * (int(np.ceil(long["Player"].nunique()/2))-1),
-                      legend_title_text="Metric")
-
+    fig.update_layout(height=500, legend_title_text="Metric")
     st.plotly_chart(fig, use_container_width=True)
+
 
 # ---------- Summary ----------
 def summarize_dataframe(df: pd.DataFrame):
@@ -204,9 +190,8 @@ else:
     # Show trends FIRST (top of page)
     st.header("Trends")
     build_trend_ui(df)
-
+    
     st.divider()
-
     # Then the preview + stats
     st.header("Dataset Overview")
     summarize_dataframe(df)
