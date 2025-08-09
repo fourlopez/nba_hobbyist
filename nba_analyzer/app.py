@@ -65,10 +65,9 @@ def build_trend_ui(df: pd.DataFrame):
 
     with r3c2:
         sel_metrics = st.multiselect(
-            "",
+            "Metrics",
             METRIC_COLS,
-            default=["PTS", "AST", "TRB", "BLK", "STL"],
-            label_visibility="collapsed"
+            default=["PTS", "AST", "TRB", "BLK", "STL"]
         )
 
     # ---------- Filtering ----------
