@@ -8,7 +8,7 @@ import numpy as np
 import plotly.express as px
 
 
-st.set_page_config(page_title="NBA Analyzer", layout="wide")
+st.set_page_config(page_title="NBA Analytics", layout="wide")
 # st.title("NBA Analyzer")
 
 # ---------- Paths ----------
@@ -119,7 +119,7 @@ def build_trend_ui(df: pd.DataFrame):
             orientation="h",
             yanchor="bottom",
             y=1.02,
-            xanchor="center",
+            xanchor="left",
             x=0.5
         )
     )
