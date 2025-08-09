@@ -109,8 +109,11 @@ def build_trend_ui(df: pd.DataFrame):
         long,
         x="Year", y="Value",
         color="Metric",
-        markers=True
+        line_group="Player",
+        markers=True,
+        hover_data=["Player"]
     )
+
     fig.update_layout(
         height=500,
         legend_title_text="",
