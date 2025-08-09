@@ -108,10 +108,10 @@ def build_trend_ui(df: pd.DataFrame):
     fig = px.line(
         long,
         x="Year", y="Value",
-        color="Metric",
-        line_group="Player",
+        color="Player",                   # color per player
+        line_dash="Metric",               # differentiate metrics by dash style
         markers=True,
-        hover_data=["Player"]
+        hover_data=["Player", "Metric"]   # show both in tooltip
     )
 
     fig.update_layout(
