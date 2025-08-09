@@ -42,7 +42,6 @@ METRIC_COLS = [
 ]
 
 def build_trend_ui(df: pd.DataFrame):
-    st.subheader("Trends")
 
     # ---------- Row 1: Year slider ----------
     yrs = pd.to_numeric(df["Year"], errors="coerce").dropna()
@@ -190,11 +189,9 @@ elif df is None:
     st.info("Select a built-in dataset or upload a file in the sidebar to begin.")
 else:
     # Show trends FIRST (top of page)
-    st.header("Trends")
     build_trend_ui(df)
-    
-    st.divider()
+
     # Then the preview + stats
-    st.header("Dataset Overview")
+    st.write("Dataset Overview")
     summarize_dataframe(df)
 
