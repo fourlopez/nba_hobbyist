@@ -40,12 +40,6 @@ METRIC_COLS = [
     "FT","FTA","FT%","ORB","DRB","TRB","AST","STL","BLK","TOV","PF","PTS","Salary","Age"
 ]
 
-# distinct player colors (choose any qualitative palette or combine a few)
-palette = q.D3 + q.Set2 + q.Set3
-players_in_view = sorted(long["Player"].dropna().unique())
-color_map = {p: palette[i % len(palette)] for i, p in enumerate(players_in_view)}
-
-
 def build_trend_ui(df: pd.DataFrame):
 
     # ---------- Row 1: Year slider ----------
@@ -110,6 +104,12 @@ def build_trend_ui(df: pd.DataFrame):
         value_name="Value"
     )
 
+    # distinct player colors (choose any qualitative palette or combine a few)
+    from plotly.colors import qualitative as q
+    palette = q.D3 + q.Set2 + q.Set3
+    players_in_view = sorted(long["Player"].dropna().unique())
+    color_map = {p: palette[i % len(palette)] for i, p in enumerate(players_in_view)}
+    
     # single compound line chart
     fig = px.line(
         long,
