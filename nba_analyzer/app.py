@@ -1,76 +1,77 @@
-import streamlit as st
-import pandas as pd
+from pathlib import Path
 import io
+import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="NBA Analyzer", layout="wide", initial_sidebar_state="expanded")
-st.title("NBA Analyzer")
+# --- locations ---
+DATA_DIR = Path(__file__).resolve().parent / "data"
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload file (CSV, Excel, JSON, TXT)",
-    type=["csv", "xlsx", "xls", "json", "txt"]
-)
+# --- cached loaders ---
+@st.cache_data
+def load_builtin_parquet(path: Path) -> pd.DataFrame:
+    return pd.read_parquet(path)  # requires pyarrow
 
-def load_file(uploaded_file):
-    df, error = None, None
-    if uploaded_file:
+def read_uploaded(file, sheet=None):
+    name = file.name.lower()
+    if name.endswith(".csv"):
+        return pd.read_csv(file)
+    elif name.endswith((".xlsx", ".xls")):
+        return pd.read_excel(file, sheet_name=sheet)
+    elif name.endswith(".json"):
+        return pd.read_json(file)
+    elif name.endswith(".txt"):
+        content = file.read().decode("utf-8")
         try:
-            ext = uploaded_file.name.split(".")[-1].lower()
-            if ext == "csv":
-                df = pd.read_csv(uploaded_file)
-            elif ext in ["xlsx", "xls"]:
-                df = pd.read_excel(uploaded_file)
-            elif ext == "json":
-                df = pd.read_json(uploaded_file)
-            elif ext == "txt":
-                content = uploaded_file.read().decode("utf-8")
-                try:
-                    df = pd.read_csv(io.StringIO(content), sep=None, engine="python")
-                except Exception:
-                    df = pd.DataFrame({"content": content.splitlines()})
-            else:
-                error = f"Unsupported file extension: {ext}"
+            return pd.read_csv(io.StringIO(content), sep=None, engine="python")
+        except Exception:
+            return pd.DataFrame({"content": content.splitlines()})
+    else:
+        raise ValueError(f"Unsupported file type: {name}")
+
+# === SIDEBAR: choose data source ===
+st.sidebar.header("Data Source")
+source = st.sidebar.radio("Choose:", ["Built-in dataset", "Upload file"], index=0)
+
+df = None
+error = None
+
+if source == "Built-in dataset":
+    # discover available .parquet files in data/
+    parquet_files = sorted([p for p in DATA_DIR.glob("*.parquet")])
+    if not parquet_files:
+        st.sidebar.warning("No .parquet files found in /data. Switch to Upload.")
+    else:
+        choice = st.sidebar.selectbox(
+            "Built-in .parquet",
+            options=parquet_files,
+            format_func=lambda p: p.name,
+        )
+        try:
+            df = load_builtin_parquet(choice)
         except Exception as e:
             error = str(e)
-    return df, error
 
-def summarize_dataframe(df):
-    st.subheader("Preview")
-    st.dataframe(df)
+else:  # Upload file
+    file = st.sidebar.file_uploader("Upload CSV / Excel / JSON / TXT",
+                                    type=["csv", "xlsx", "xls", "json", "txt"])
+    sheet = None
+    if file and file.name.lower().endswith((".xlsx", ".xls")):
+        xls = pd.ExcelFile(file)
+        sheet = st.sidebar.selectbox("Excel sheet", xls.sheet_names, index=0)
+        file.seek(0)
+    if file:
+        try:
+            df = read_uploaded(file, sheet=sheet)
+        except Exception as e:
+            error = str(e)
 
-    st.subheader("Dataset Summary")
-    duplicate_count = df.duplicated().sum()
-    st.code(f"Shape: {(df.shape[0], df.shape[1])}, Duplicate Rows: {duplicate_count}")
-    st.code("Columns: " + ", ".join(map(str, df.columns)))
+# === MAIN ===
+st.title("NBA Analyzer")
 
-    rows = []
-    for col in df.columns:
-        s = df[col]
-        dtype = s.dtype
-        non_null = s.notnull().sum()
-        nulls = s.isnull().sum()
-        uniq = s.nunique()
-        total = mean = minv = maxv = modev = ""
-        if pd.api.types.is_numeric_dtype(s):
-            total = s.sum()
-            mean = s.mean()
-            minv = s.min()
-            maxv = s.max()
-            modev = s.mode().iloc[0] if not s.mode().empty else ""
-        elif pd.api.types.is_object_dtype(s) or pd.api.types.is_categorical_dtype(s):
-            modev = s.mode().iloc[0] if not s.mode().empty else ""
-        rows.append([col, dtype, non_null, nulls, uniq, total, mean, modev, minv, maxv])
-
-    summary_df = pd.DataFrame(rows, columns=[
-        "Column", "Type", "Non-Null", "Null Count", "Unique", "Total", "Mean", "Mode", "Min", "Max"
-    ])
-    st.subheader("Column Summary")
-    st.dataframe(summary_df, use_container_width=True)
-
-if uploaded_file:
-    df, err = load_file(uploaded_file)
-    if err:
-        st.error(f"Error: {err}")
-    elif df is not None:
-        summarize_dataframe(df)
+if error:
+    st.error(error)
+elif df is not None:
+    # call your existing summary block
+    summarize_dataframe(df)  # <-- keep your previous function
 else:
-    st.info("Upload a CSV, Excel, JSON, or TXT file to begin.")
+    st.info("Select a built-in dataset or upload a file in the sidebar to begin.")
