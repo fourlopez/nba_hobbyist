@@ -45,7 +45,7 @@ def build_trend_ui(df: pd.DataFrame):
     # ---------- Row 1: Year slider ----------
     yrs = pd.to_numeric(df["Year"], errors="coerce").dropna()
     yr_min, yr_max = int(yrs.min()), int(yrs.max())
-    years = st.slider("Year range", yr_min, yr_max, (yr_min, yr_max))
+    years = st.slider("", yr_min, yr_max, (yr_min, yr_max))
 
     # ---------- Row 2: Team / Pos ----------
     r2c1, r2c2 = st.columns(2)
@@ -65,7 +65,7 @@ def build_trend_ui(df: pd.DataFrame):
 
     with r3c2:
         sel_metrics = st.multiselect(
-            "Metrics",
+            "Metric(s)",
             METRIC_COLS,
             default=["PTS", "AST", "TRB", "BLK", "STL"]
         )
