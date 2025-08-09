@@ -62,13 +62,11 @@ def build_trend_ui(df: pd.DataFrame):
         players = st.multiselect("Player(s)", sorted(df["Player"].dropna().unique().tolist()))
 
     with r3c2:
-        st.markdown("**Metrics**")
-        grid = st.columns(3)
-        sel_metrics = []
-        for i, m in enumerate(METRIC_COLS):
-            default = (m == "PTS")
-            if grid[i % 3].checkbox(m, value=default, key=f"metric_{m}"):
-                sel_metrics.append(m)
+        sel_metrics = st.multiselect(
+            "Metrics",
+            METRIC_COLS,
+            default=["PTS"]
+        )
 
     # ---------- Filtering ----------
     f = df.copy()
