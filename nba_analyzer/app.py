@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="NBA Analyzer", layout="wide")
-st.title("NBA Analyzer")
+# st.title("NBA Analyzer")
 
 # ---------- Paths ----------
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -71,7 +71,7 @@ def summarize_dataframe(df: pd.DataFrame):
     st.dataframe(summary_df, use_container_width=True)
 
 # ---------- Sidebar: choose data source ----------
-st.sidebar.header("Data Source")
+st.sidebar.header("NBA Analyzer")
 choice = st.sidebar.radio("Choose:", ["Built-in dataset", "Upload file"], index=0)
 
 df = None
