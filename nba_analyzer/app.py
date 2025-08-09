@@ -108,16 +108,7 @@ def build_trend_ui(df: pd.DataFrame):
         color="Metric",
         markers=True
     )
-    fig.update_layout(
-        height=500, legend_title_text="Metrics",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5
-        )
-    )
+    fig.update_layout(height=500, legend_title_text="Metrics")
     st.plotly_chart(fig, use_container_width=True)
 
 
