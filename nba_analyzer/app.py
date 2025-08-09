@@ -120,7 +120,7 @@ def build_trend_ui(df: pd.DataFrame):
             yanchor="bottom",
             y=1.02,
             xanchor="left",
-            x=0.5
+            x=0
         )
     )
     st.plotly_chart(fig, use_container_width=True)
