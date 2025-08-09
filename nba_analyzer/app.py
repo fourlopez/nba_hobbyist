@@ -55,7 +55,7 @@ def build_trend_ui(df: pd.DataFrame):
     with r2c2:
         pos = st.multiselect("Pos", sorted(df["Pos"].dropna().unique().tolist()))
 
-    # ---------- Row 3: Player / Metrics (checkbox grid) ----------
+    # ---------- Row 3: Player / Metrics ----------
     r3c1, r3c2 = st.columns([1, 1])
     with r3c1:
         players = st.multiselect(
@@ -97,18 +97,32 @@ def build_trend_ui(df: pd.DataFrame):
     for m in sel_metrics:
         f[m] = pd.to_numeric(f[m], errors="coerce")
 
-    # long format for compound lines
-    long = f.melt(id_vars=["Year","Player","Team","Pos"],
-                  value_vars=sel_metrics, var_name="Metric", value_name="Metrics")
+    # long format for compound lines (FIX: value_name should be "Value")
+    long = f.melt(
+        id_vars=["Year","Player","Team","Pos"],
+        value_vars=sel_metrics,
+        var_name="Metric",
+        value_name="Value"
+    )
 
-    # single compound line chart (no facets, no options)
+    # single compound line chart
     fig = px.line(
         long,
         x="Year", y="Value",
         color="Metric",
         markers=True
     )
-    fig.update_layout(height=500, legend_title_text="Metrics")
+    fig.update_layout(
+        height=500,
+        legend_title_text="Metrics",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -194,4 +208,3 @@ else:
     # Then the preview + stats
     st.write("Dataset Overview")
     summarize_dataframe(df)
-
