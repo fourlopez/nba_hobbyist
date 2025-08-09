@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 import numpy as np
 import plotly.express as px
-
+from plotly.colors import qualitative as q
 
 st.set_page_config(page_title="NBA Analytics", layout="wide")
 
@@ -39,6 +39,12 @@ METRIC_COLS = [
     "G","GS","MP","FG","FGA","FG%","3P","3PA","3P%","2P","2PA","2P%","eFG%",
     "FT","FTA","FT%","ORB","DRB","TRB","AST","STL","BLK","TOV","PF","PTS","Salary","Age"
 ]
+
+# distinct player colors (choose any qualitative palette or combine a few)
+palette = q.D3 + q.Set2 + q.Set3
+players_in_view = sorted(long["Player"].dropna().unique())
+color_map = {p: palette[i % len(palette)] for i, p in enumerate(players_in_view)}
+
 
 def build_trend_ui(df: pd.DataFrame):
 
@@ -108,22 +114,16 @@ def build_trend_ui(df: pd.DataFrame):
     fig = px.line(
         long,
         x="Year", y="Value",
-        color="Player",                   # color per player
-        line_dash="Metric",               # differentiate metrics by dash style
+        color="Player",                 # colors by player only
+        line_dash="Metric",             # metrics use dash styles (not colors)
         markers=True,
-        hover_data=["Player", "Metric"]   # show both in tooltip
+        hover_data=["Player", "Metric"],
+        color_discrete_map=color_map    # deterministic colors per player
     )
-
     fig.update_layout(
         height=500,
         legend_title_text="",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="left",
-            x=0
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
     )
     fig.update_yaxes(title_text="")
     st.plotly_chart(fig, use_container_width=True)
