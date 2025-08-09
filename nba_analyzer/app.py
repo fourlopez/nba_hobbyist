@@ -200,7 +200,9 @@ if error:
 elif df is None:
     st.info("Select a built-in dataset or upload a file in the sidebar to begin.")
 else:
-    # Show trends FIRST (top of page)
+    
+    # Show trends
+    st.write("Analytics Dashboard")
     build_trend_ui(df)
 
     # Then the preview + stats
