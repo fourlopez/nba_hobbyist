@@ -109,7 +109,7 @@ def build_trend_ui(df: pd.DataFrame):
         markers=True
     )
     fig.update_layout(
-        height=500, legend_title_text="Metrics"
+        height=500, legend_title_text="Metrics",
         legend=dict(
             orientation="h",
             yanchor="bottom",
