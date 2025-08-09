@@ -99,7 +99,7 @@ def build_trend_ui(df: pd.DataFrame):
 
     # long format for compound lines
     long = f.melt(id_vars=["Year","Player","Team","Pos"],
-                  value_vars=sel_metrics, var_name="Metric", value_name="Value")
+                  value_vars=sel_metrics, var_name="Metric", value_name="Metrics")
 
     # single compound line chart (no facets, no options)
     fig = px.line(
@@ -108,7 +108,16 @@ def build_trend_ui(df: pd.DataFrame):
         color="Metric",
         markers=True
     )
-    fig.update_layout(height=500, legend_title_text="Metric")
+    fig.update_layout(
+        height=500, legend_title_text="Metrics"
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 
