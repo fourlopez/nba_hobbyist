@@ -9,7 +9,6 @@ import plotly.express as px
 
 
 st.set_page_config(page_title="NBA Analytics", layout="wide")
-# st.title("NBA Analyzer")
 
 # ---------- Paths ----------
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -66,9 +65,10 @@ def build_trend_ui(df: pd.DataFrame):
 
     with r3c2:
         sel_metrics = st.multiselect(
-            "Metrics",
+            "",
             METRIC_COLS,
-            default=["PTS", "AST", "TRB", "BLK", "STL"]
+            default=["PTS", "AST", "TRB", "BLK", "STL"],
+            label_visibility="collapsed"
         )
 
     # ---------- Filtering ----------
@@ -114,7 +114,7 @@ def build_trend_ui(df: pd.DataFrame):
     )
     fig.update_layout(
         height=500,
-        legend_title_text="Metrics",
+        legend_title_text="",
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -123,15 +123,13 @@ def build_trend_ui(df: pd.DataFrame):
             x=0
         )
     )
+    fig.update_yaxes(title_text="")
     st.plotly_chart(fig, use_container_width=True)
-
 
 # ---------- Summary ----------
 def summarize_dataframe(df: pd.DataFrame):
-    st.subheader("Preview")
     st.dataframe(df, use_container_width=True)
 
-    st.subheader("Dataset Summary")
     dupes = df.duplicated().sum()
     st.code(f"Shape: {(df.shape[0], df.shape[1])}, Duplicate Rows: {dupes}")
     st.code("Columns: " + ", ".join(map(str, df.columns)))
@@ -161,7 +159,6 @@ def summarize_dataframe(df: pd.DataFrame):
         columns=["Column", "Type", "Non-Null", "Null Count", "Unique",
                  "Total", "Mean", "Mode", "Min", "Max"]
     )
-    st.subheader("Column Summary")
     st.dataframe(summary_df, use_container_width=True)
 
 # ---------- Sidebar: choose data source ----------
