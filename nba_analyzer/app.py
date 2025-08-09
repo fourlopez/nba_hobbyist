@@ -1,45 +1,139 @@
-import streamlit as st
-import pandas as pd
+# nba_analyzer/app.py
+
+from pathlib import Path
 import io
+import pandas as pd
+import streamlit as st
+import numpy as np
+import plotly.express as px
 
-st.set_page_config(page_title="NBA Analyzer", layout="wide", initial_sidebar_state="expanded")
-st.title("NBA Analyzer")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload file (CSV, Excel, JSON, TXT)",
-    type=["csv", "xlsx", "xls", "json", "txt"]
-)
+st.set_page_config(page_title="NBA Analyzer", layout="wide")
+# st.title("NBA Analyzer")
 
-def load_file(uploaded_file):
-    df, error = None, None
-    if uploaded_file:
+# ---------- Paths ----------
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+# ---------- Loaders ----------
+@st.cache_data
+def load_parquet(path: Path) -> pd.DataFrame:
+    return pd.read_parquet(path)  # requires pyarrow
+
+def read_uploaded(file, sheet=None) -> pd.DataFrame:
+    name = file.name.lower()
+    if name.endswith(".csv"):
+        return pd.read_csv(file)
+    if name.endswith((".xlsx", ".xls")):
+        return pd.read_excel(file, sheet_name=sheet)
+    if name.endswith(".json"):
+        return pd.read_json(file)
+    if name.endswith(".txt"):
+        content = file.read().decode("utf-8")
         try:
-            ext = uploaded_file.name.split(".")[-1].lower()
-            if ext == "csv":
-                df = pd.read_csv(uploaded_file)
-            elif ext in ["xlsx", "xls"]:
-                df = pd.read_excel(uploaded_file)
-            elif ext == "json":
-                df = pd.read_json(uploaded_file)
-            elif ext == "txt":
-                content = uploaded_file.read().decode("utf-8")
-                try:
-                    df = pd.read_csv(io.StringIO(content), sep=None, engine="python")
-                except Exception:
-                    df = pd.DataFrame({"content": content.splitlines()})
-            else:
-                error = f"Unsupported file extension: {ext}"
-        except Exception as e:
-            error = str(e)
-    return df, error
+            return pd.read_csv(io.StringIO(content), sep=None, engine="python")
+        except Exception:
+            return pd.DataFrame({"content": content.splitlines()})
+    raise ValueError(f"Unsupported file type: {name}")
 
-def summarize_dataframe(df):
+CATEGORY_COLS = ["Player", "Team", "Pos", "Year"]
+METRIC_COLS = [
+    "G","GS","MP","FG","FGA","FG%","3P","3PA","3P%","2P","2PA","2P%","eFG%",
+    "FT","FTA","FT%","ORB","DRB","TRB","AST","STL","BLK","TOV","PF","PTS","Salary","Age"
+]
+
+def build_trend_ui(df: pd.DataFrame):
+
+    # ---------- Row 1: Year slider ----------
+    yrs = pd.to_numeric(df["Year"], errors="coerce").dropna()
+    yr_min, yr_max = int(yrs.min()), int(yrs.max())
+    years = st.slider("Year range", yr_min, yr_max, (yr_min, yr_max))
+
+    # ---------- Row 2: Team / Pos ----------
+    r2c1, r2c2 = st.columns(2)
+    with r2c1:
+        teams = st.multiselect("Team(s)", sorted(df["Team"].dropna().unique().tolist()))
+    with r2c2:
+        pos = st.multiselect("Pos", sorted(df["Pos"].dropna().unique().tolist()))
+
+    # ---------- Row 3: Player / Metrics ----------
+    r3c1, r3c2 = st.columns([1, 1])
+    with r3c1:
+        players = st.multiselect(
+            "Player(s)",
+            sorted(df["Player"].dropna().unique().tolist()),
+            default=["LeBron James"]
+        )
+
+    with r3c2:
+        sel_metrics = st.multiselect(
+            "Metrics",
+            METRIC_COLS,
+            default=["PTS", "AST", "TRB", "BLK", "STL"]
+        )
+
+    # ---------- Filtering ----------
+    f = df.copy()
+    if teams:   f = f[f["Team"].isin(teams)]
+    if pos:     f = f[f["Pos"].isin(pos)]
+    if players: f = f[f["Player"].isin(players)]
+    f = f[(pd.to_numeric(f["Year"], errors="coerce") >= years[0]) &
+          (pd.to_numeric(f["Year"], errors="coerce") <= years[1])]
+
+    if not sel_metrics:
+        st.info("Select at least one metric (right panel).")
+        return
+    if f.empty:
+        st.warning("No data for the chosen filters.")
+        return
+
+    sel_metrics = [m for m in sel_metrics if m in f.columns]
+    if not sel_metrics:
+        st.warning("Selected metrics are not present in the dataset.")
+        return
+
+    # keep needed cols; cast numerics
+    f = f[CATEGORY_COLS + sel_metrics].copy()
+    f["Year"] = pd.to_numeric(f["Year"], errors="coerce").astype("Int64")
+    for m in sel_metrics:
+        f[m] = pd.to_numeric(f[m], errors="coerce")
+
+    # long format for compound lines (FIX: value_name should be "Value")
+    long = f.melt(
+        id_vars=["Year","Player","Team","Pos"],
+        value_vars=sel_metrics,
+        var_name="Metric",
+        value_name="Value"
+    )
+
+    # single compound line chart
+    fig = px.line(
+        long,
+        x="Year", y="Value",
+        color="Metric",
+        markers=True
+    )
+    fig.update_layout(
+        height=500,
+        legend_title_text="Metrics",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ---------- Summary ----------
+def summarize_dataframe(df: pd.DataFrame):
     st.subheader("Preview")
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
 
     st.subheader("Dataset Summary")
-    duplicate_count = df.duplicated().sum()
-    st.code(f"Shape: {(df.shape[0], df.shape[1])}, Duplicate Rows: {duplicate_count}")
+    dupes = df.duplicated().sum()
+    st.code(f"Shape: {(df.shape[0], df.shape[1])}, Duplicate Rows: {dupes}")
     st.code("Columns: " + ", ".join(map(str, df.columns)))
 
     rows = []
@@ -49,6 +143,7 @@ def summarize_dataframe(df):
         non_null = s.notnull().sum()
         nulls = s.isnull().sum()
         uniq = s.nunique()
+
         total = mean = minv = maxv = modev = ""
         if pd.api.types.is_numeric_dtype(s):
             total = s.sum()
@@ -58,19 +153,58 @@ def summarize_dataframe(df):
             modev = s.mode().iloc[0] if not s.mode().empty else ""
         elif pd.api.types.is_object_dtype(s) or pd.api.types.is_categorical_dtype(s):
             modev = s.mode().iloc[0] if not s.mode().empty else ""
+
         rows.append([col, dtype, non_null, nulls, uniq, total, mean, modev, minv, maxv])
 
-    summary_df = pd.DataFrame(rows, columns=[
-        "Column", "Type", "Non-Null", "Null Count", "Unique", "Total", "Mean", "Mode", "Min", "Max"
-    ])
+    summary_df = pd.DataFrame(
+        rows,
+        columns=["Column", "Type", "Non-Null", "Null Count", "Unique",
+                 "Total", "Mean", "Mode", "Min", "Max"]
+    )
     st.subheader("Column Summary")
     st.dataframe(summary_df, use_container_width=True)
 
-if uploaded_file:
-    df, err = load_file(uploaded_file)
-    if err:
-        st.error(f"Error: {err}")
-    elif df is not None:
-        summarize_dataframe(df)
+# ---------- Sidebar: choose data source ----------
+st.sidebar.header("NBA Analyzer")
+choice = st.sidebar.radio("Choose:", ["Built-in dataset", "Upload file"], index=0)
+
+df = None
+error = None
+
+if choice == "Built-in dataset":
+    parquet_files = sorted(DATA_DIR.glob("*.parquet"))
+    if not parquet_files:
+        st.sidebar.warning("No .parquet files found in /data.")
+    else:
+        pick = st.sidebar.selectbox("Built-in .parquet", parquet_files, format_func=lambda p: p.name)
+        try:
+            df = load_parquet(pick)
+        except Exception as e:
+            error = str(e)
 else:
-    st.info("Upload a CSV, Excel, JSON, or TXT file to begin.")
+    up = st.sidebar.file_uploader("Upload CSV / Excel / JSON / TXT",
+                                  type=["csv", "xlsx", "xls", "json", "txt"])
+    sheet = None
+    if up and up.name.lower().endswith((".xlsx", ".xls")):
+        # peek sheets
+        xls = pd.ExcelFile(up)
+        sheet = st.sidebar.selectbox("Excel sheet", xls.sheet_names, index=0)
+        up.seek(0)  # reset after peek
+    if up:
+        try:
+            df = read_uploaded(up, sheet=sheet)
+        except Exception as e:
+            error = str(e)
+
+# ---------- Main ----------
+if error:
+    st.error(error)
+elif df is None:
+    st.info("Select a built-in dataset or upload a file in the sidebar to begin.")
+else:
+    # Show trends FIRST (top of page)
+    build_trend_ui(df)
+
+    # Then the preview + stats
+    st.write("Dataset Overview")
+    summarize_dataframe(df)
