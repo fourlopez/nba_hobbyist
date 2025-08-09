@@ -59,13 +59,17 @@ def build_trend_ui(df: pd.DataFrame):
     # ---------- Row 3: Player / Metrics (checkbox grid) ----------
     r3c1, r3c2 = st.columns([1, 1])
     with r3c1:
-        players = st.multiselect("Player(s)", sorted(df["Player"].dropna().unique().tolist()))
+        players = st.multiselect(
+            "Player(s)",
+            sorted(df["Player"].dropna().unique().tolist()),
+            default=["LeBron James"]
+        )
 
     with r3c2:
         sel_metrics = st.multiselect(
             "Metrics",
             METRIC_COLS,
-            default=["PTS"]
+            default=["PTS", "AST", "TRB", "BLK", "STL"]
         )
 
     # ---------- Filtering ----------
