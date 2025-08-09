@@ -130,6 +130,7 @@ def build_trend_ui(df: pd.DataFrame):
 def summarize_dataframe(df: pd.DataFrame):
     st.dataframe(df, use_container_width=True)
 
+    st.write("Summary Statistics")
     dupes = df.duplicated().sum()
     st.code(f"Shape: {(df.shape[0], df.shape[1])}, Duplicate Rows: {dupes}")
     st.code("Columns: " + ", ".join(map(str, df.columns)))
