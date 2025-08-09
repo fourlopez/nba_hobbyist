@@ -16,7 +16,7 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 # ---------- Loaders ----------
 @st.cache_data
 def load_parquet(path: Path) -> pd.DataFrame:
-    return pd.read_parquet(path)  # requires pyarrow
+    return pd.read_parquet(path)  
 
 def read_uploaded(file, sheet=None) -> pd.DataFrame:
     name = file.name.lower()
@@ -45,7 +45,7 @@ def build_trend_ui(df: pd.DataFrame):
     # ---------- Row 1: Year slider ----------
     yrs = pd.to_numeric(df["Year"], errors="coerce").dropna()
     yr_min, yr_max = int(yrs.min()), int(yrs.max())
-    years = st.slider("", yr_min, yr_max, (yr_min, yr_max))
+    years = st.slider("", yr_min, yr_max, (yr_min, yr_max), label_visibility='collapsed')
 
     # ---------- Row 2: Team / Pos ----------
     r2c1, r2c2 = st.columns(2)
@@ -60,14 +60,37 @@ def build_trend_ui(df: pd.DataFrame):
         players = st.multiselect(
             "Player(s)",
             sorted(df["Player"].dropna().unique().tolist()),
-            default=["LeBron James"]
+            default=["LeBron James", "Stephen Curry", "Nikola Jokic"]
         )
 
     with r3c2:
         sel_metrics = st.multiselect(
             "Metric(s)",
             METRIC_COLS,
-            default=["PTS", "AST", "TRB", "BLK", "STL"]
+            default=["PTS"]
+        )
+
+    # ---------- Row 4: Aggregation controls ----------
+    # Only offer "Aggregate On" among categories that currently have any selection,
+    # falling back to all if nothing is selected yet.
+    selected_cats = []
+    if teams:   selected_cats.append("Team")
+    if pos:     selected_cats.append("Pos")
+    if players: selected_cats.append("Player")
+    agg_candidates = selected_cats or ["Player", "Team", "Pos"]
+
+    r4c1, r4c2 = st.columns([1, 1])
+    with r4c1:
+        aggregate_on = st.selectbox(
+            "Aggregate On",
+            agg_candidates,
+            help="Choose which category becomes the legend and grouping dimension."
+        )
+    with r4c2:
+        aggregate_by = st.selectbox(
+            "Aggregate By",
+            ["sum", "average"],
+            help="Aggregate selected metrics across the other categories."
         )
 
     # ---------- Filtering ----------
@@ -91,42 +114,63 @@ def build_trend_ui(df: pd.DataFrame):
         return
 
     # keep needed cols; cast numerics
-    f = f[CATEGORY_COLS + sel_metrics].copy()
+    keep_cols = ["Year", "Player", "Team", "Pos"] + sel_metrics
+    f = f[keep_cols].copy()
     f["Year"] = pd.to_numeric(f["Year"], errors="coerce").astype("Int64")
     for m in sel_metrics:
         f[m] = pd.to_numeric(f[m], errors="coerce")
 
-    # long format for compound lines (FIX: value_name should be "Value")
-    long = f.melt(
-        id_vars=["Year","Player","Team","Pos"],
+    # ---------- Aggregate to the chosen category ----------
+    # Group by Year and the chosen aggregate category; aggregate metrics across the rest.
+    agg_func = np.sum if aggregate_by == "sum" else np.mean
+    g = f.groupby(["Year", aggregate_on], dropna=False)[sel_metrics].agg(agg_func).reset_index()
+
+    # ---------- Long format + combined legend ----------
+    long = g.melt(
+        id_vars=["Year", aggregate_on],
         value_vars=sel_metrics,
         var_name="Metric",
         value_name="Value"
     )
+    # Combined legend label, but keep color consistent per aggregate value
+    long["Legend"] = long[aggregate_on].astype(str) + " \u2022 " + long["Metric"]
+    long["ColorKey"] = long[aggregate_on].astype(str)
 
-    # distinct player colors (choose any qualitative palette or combine a few)
+    # ---------- Colors: one color per aggregate value (metrics vary by dash) ----------
     from plotly.colors import qualitative as q
     palette = q.D3 + q.Set2 + q.Set3
-    players_in_view = sorted(long["Player"].dropna().unique())
-    color_map = {p: palette[i % len(palette)] for i, p in enumerate(players_in_view)}
-    
-    # single compound line chart
+    entities = sorted(long["ColorKey"].dropna().unique())
+    entity_color = {e: palette[i % len(palette)] for i, e in enumerate(entities)}
+    # Map each Legend entry to its entity's color
+    color_map = {}
+    for _, row in long[["Legend", "ColorKey"]].drop_duplicates().iterrows():
+        color_map[row["Legend"]] = entity_color.get(row["ColorKey"], None)
+
+    # ---------- Plot ----------
     fig = px.line(
         long,
-        x="Year", y="Value",
-        color="Player",                 # colors by player only
-        line_dash="Metric",             # metrics use dash styles (not colors)
+        x="Year",
+        y="Value",
+        color="Legend",          # combined legend (AggregateValue • Metric)
+        line_dash="Metric",      # same entity uses same color; metric differs by dash
         markers=True,
-        hover_data=["Player", "Metric"],
-        color_discrete_map=color_map    # deterministic colors per player
+        hover_data=[aggregate_on, "Metric"]
     )
+    # Remove Plotly's automatic ", Metric" suffix from legend labels
+    fig.for_each_trace(lambda t: t.update(name=t.name.split(",")[0]))
+
+    fig.update_traces(mode="lines+markers")
     fig.update_layout(
         height=500,
         legend_title_text="",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        coloraxis_showscale=False
     )
+    # Apply color map (only for the traces we have)
+    fig.for_each_trace(lambda t: t.update(line=dict(color=color_map.get(t.name, None))))
     fig.update_yaxes(title_text="")
     st.plotly_chart(fig, use_container_width=True)
+
 
 # ---------- Summary ----------
 def summarize_dataframe(df: pd.DataFrame):
