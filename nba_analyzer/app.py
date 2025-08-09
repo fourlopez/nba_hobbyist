@@ -137,8 +137,26 @@ def build_trend_ui(df: pd.DataFrame):
     long["ColorKey"] = long[aggregate_on].astype(str)
 
     # ---------- Colors: one color per aggregate value (metrics vary by dash) ----------
-    from plotly.colors import qualitative as q
-    palette = q.Light24 + q.Pastel2 + q.Pastel1
+
+    # First group: blues & oranges (from Plotly + D3)
+    first_group = [
+        "#1f77b4", "#ff7f0e", "#2ca9df", "#ffa64d",
+        "#4c78a8", "#f58518"
+    ]
+    
+    # Second group: violets & yellows (from Set3 + Safe)
+    second_group = [
+        "#9467bd", "#d9b300", "#c5b0d5", "#ffdd75",
+        "#8e6bb1", "#ffd92f"
+    ]
+    
+    # Third group: greens & light neutrals (from Dark2 + Light24)
+    third_group = [
+        "#2ca02c", "#b2df8a", "#66c2a5", "#e5e5e5",
+        "#a6d854", "#f0f0f0"
+    ]
+    
+    palette = first_group + second_group + third_group
     entities = sorted(long["ColorKey"].dropna().unique())
     entity_color = {e: palette[i % len(palette)] for i, e in enumerate(entities)}
     # Map each Legend entry to its entity's color
