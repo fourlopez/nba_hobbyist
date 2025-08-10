@@ -139,24 +139,36 @@ def build_trend_ui(df: pd.DataFrame):
     # ---------- Colors: one color per aggregate value (metrics vary by dash) ----------
 
     # First group: blues & oranges (from Plotly + D3)
+    # --- Custom 18-color palette ---
     first_group = [
-        "#1f77b4", "#ff7f0e", "#2ca9df", "#ffa64d",
-        "#4c78a8", "#f58518"
+        "#1f77b4",  # Medium blue
+        "#08306b",  # Very dark navy
+        "#6baed6",  # Light sky blue
+        "#ff7f0e",  # Bright orange
+        "#a63603",  # Dark burnt orange
+        "#fdae6b"   # Light orange
     ]
     
-    # Second group: violets & yellows (from Set3 + Safe)
     second_group = [
-        "#9467bd", "#d9b300", "#c5b0d5", "#ffdd75",
-        "#8e6bb1", "#ffd92f"
+        "#54278f",  # Deep violet
+        "#756bb1",  # Medium violet
+        "#dadaeb",  # Light lavender
+        "#b8860b",  # Dark goldenrod
+        "#ffd92f",  # Bright yellow
+        "#ffe87c"   # Light yellow
     ]
     
-    # Third group: greens & light neutrals (from Dark2 + Light24)
     third_group = [
-        "#2ca02c", "#b2df8a", "#66c2a5", "#e5e5e5",
-        "#a6d854", "#f0f0f0"
+        "#00441b",  # Deep forest green
+        "#238b45",  # Medium green
+        "#a1d99b",  # Light green
+        "#7f7f7f",  # Medium gray
+        "#bdbdbd",  # Light gray
+        "#f0f0f0"   # Near white
     ]
     
     palette = first_group + second_group + third_group
+
     entities = sorted(long["ColorKey"].dropna().unique())
     entity_color = {e: palette[i % len(palette)] for i, e in enumerate(entities)}
     # Map each Legend entry to its entity's color
