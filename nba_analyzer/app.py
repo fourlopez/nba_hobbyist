@@ -7,8 +7,6 @@ import streamlit as st
 import numpy as np
 import plotly.express as px
 from plotly.colors import qualitative as q
-import random
-
 
 st.set_page_config(page_title="NBA Analytics", layout="wide")
 
@@ -152,41 +150,13 @@ def build_trend_ui(df: pd.DataFrame):
               (pd.to_numeric(f[year_col], errors="coerce") <= years[1])]
 
     # ---------- Dynamic category filters ----------
-    # ----- One-time random defaults: 1 category gets up to 3 values; 1 random metric -----
-
-    seed_sig = (tuple(cat_cols), tuple(metric_cols))  # reseed only if schema changes
-    if st.session_state.get("seed_sig") != seed_sig:
-        st.session_state["seed_sig"] = seed_sig
-
-    # choose which category to seed (any with at least 1 option)
-    eligible = []
-    for c in cat_cols:
-        opts = sorted(pd.Series(f[c]).dropna().unique().tolist())
-        if len(opts) > 0:
-            eligible.append((c, opts))
-    seed_cat, seed_opts = (random.choice(eligible) if eligible else (None, []))
-
-    # store defaults per category (only the seed category gets values)
-    st.session_state["seed_defaults"] = {}
-    for c in cat_cols:
-        if c == seed_cat:
-            k = min(3, len(seed_opts))
-            st.session_state["seed_defaults"][c] = random.sample(seed_opts, k) if k > 0 else []
-        else:
-            st.session_state["seed_defaults"][c] = []
-
-    # pick one random metric
-    st.session_state["default_metrics"] = [random.choice(metric_cols)] if metric_cols else []
-    
     # One multiselect per category column (like your current Team/Pos/Player)
     cat_selections = {}
     cat_cols_layout = st.columns(min(4, len(cat_cols))) if len(cat_cols) > 1 else [st]
     for i, c in enumerate(cat_cols):
         with cat_cols_layout[i % len(cat_cols_layout)]:
             opts = sorted(pd.Series(f[c]).dropna().unique().tolist())
-            default_sel = st.session_state.get("seed_defaults", {}).get(c, [])
-            cat_selections[c] = st.multiselect(c, opts, default=default_sel)
-
+            cat_selections[c] = st.multiselect(c, opts)
 
     # Apply category filters
     for c, vals in cat_selections.items():
@@ -194,9 +164,7 @@ def build_trend_ui(df: pd.DataFrame):
             f = f[f[c].isin(vals)]
 
     # ---------- Metric selection (single control) ----------
-    default_metrics = st.session_state.get("default_metrics", ([metric_cols[0]] if metric_cols else []))
-    sel_metrics = st.multiselect("Metric(s)", metric_cols, default=default_metrics)
-
+    sel_metrics = st.multiselect("Metric(s)", metric_cols, default=[metric_cols[0]])
 
     if not sel_metrics:
         st.info("Select at least one metric.")
@@ -340,19 +308,16 @@ else:
             error = str(e)
 
 # ---------- Main ----------
-# ---------- Main ----------
 if error:
     st.error(error)
 elif df is None:
     st.info("Select a built-in dataset or upload a file in the sidebar to begin.")
 else:
-    st.write("Analytics Dashboard")
     
-    try:
-        build_trend_ui(df)   # graphing & filters
-    except Exception as e:
-        st.error(f"Error in Analytics Dashboard: {e}")
+    # Show trends
+    st.write("Analytics Dashboard")
+    build_trend_ui(df)
 
-    # This will run regardless of graphing errors
+    # Then the preview + stats
     st.write("Dataset Overview")
     summarize_dataframe(df)
