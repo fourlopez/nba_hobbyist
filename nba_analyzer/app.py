@@ -285,9 +285,9 @@ error = None
 if choice == "Built-in dataset":
     parquet_files = sorted(DATA_DIR.glob("*.parquet"))
     if not parquet_files:
-        st.sidebar.warning("No .parquet files found in /data.")
+        st.sidebar.warning("No files found in /data.")
     else:
-        pick = st.sidebar.selectbox("Built-in .parquet", parquet_files, format_func=lambda p: p.name)
+        pick = st.sidebar.selectbox("Select built-in data", parquet_files, format_func=lambda p: p.name)
         try:
             df = load_parquet(pick)
         except Exception as e:
