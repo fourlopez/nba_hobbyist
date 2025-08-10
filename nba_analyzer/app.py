@@ -115,74 +115,97 @@ def build_trend_ui(df: pd.DataFrame):
     infer_year, infer_cats, infer_metrics = infer_schema(df)
 
     with st.expander("Schema Settings", expanded=False):
-        year_col = st.selectbox("X-axis column", [infer_year] + [c for c in df.columns if c != infer_year], index=0)
-        all_cols = list(df.columns)
-        cat_cols = st.multiselect("Category columns", all_cols, default=infer_cats)
-        metric_cols = st.multiselect("Metric columns", [c for c in all_cols if c != year_col],
-                                     default=infer_metrics or [])
+        # 1) choose x-axis first
+        suggested_year, suggested_cats, suggested_metrics = infer_schema(df)  # you can keep your earlier call; this is just clearer
+        year_choices = list(df.columns)
+        year_col = st.selectbox("X-axis column", year_choices, index=year_choices.index(suggested_year))
 
-    if not metric_cols:
-        st.info("Select at least one metric column in the Schema expander.")
-        return
-    if not cat_cols:
-        st.info("Select at least one category column in the Schema expander.")
-        return
+        all_cols = list(df.columns)
+
+        # 2) recompute options based on the chosen year_col and sanitize defaults
+        def _safe_defaults(defs, opts):
+            s = [d for d in (defs or []) if d in opts]
+            # optional: fallback to first option if defaults got wiped
+            return s
+
+        # category options: any col except the chosen x-axis
+        cat_options = [c for c in all_cols if c != year_col]
+        cat_defaults = _safe_defaults([c for c in suggested_cats if c != year_col], cat_options)
+
+        # metric options: any col except chosen x-axis
+        metric_options = [c for c in all_cols if c != year_col]
+        metric_defaults = _safe_defaults([m for m in suggested_metrics if m != year_col], metric_options)
+
+        # 3) render widgets with sanitized defaults
+        cat_cols = st.multiselect("Category columns", cat_options, default=cat_defaults, key="schema_cat_cols")
+        metric_cols = st.multiselect("Metric columns", metric_options, default=metric_defaults, key="schema_metric_cols")
 
     # Cast year/x
-    f = df.copy()
-    if pd.api.types.is_datetime64_any_dtype(f[year_col]):
-        # ok for slider with datetimes
+    with st.expander("Graph Filters", expanded=True):
+        # ---------- X-axis handling: allow numeric, datetime, or categorical ----------
+        f = df.copy()
+        category_orders = {}   # will be passed to px.line()
+
         x_series = f[year_col]
-        x_min, x_max = x_series.min(), x_series.max()
-        years = st.slider("", x_min, x_max, (x_min, x_max), label_visibility='collapsed')
-        f = f[(f[year_col] >= years[0]) & (f[year_col] <= years[1])]
-    else:
-        # try numeric
-        x_num = pd.to_numeric(f[year_col], errors="coerce")
-        f[year_col] = x_num
-        yrs = x_num.dropna()
-        if yrs.empty:
-            st.warning(f"No numeric values for x-axis column '{year_col}'.")
-            return
-        yr_min, yr_max = int(yrs.min()), int(yrs.max())
-        years = st.slider("", yr_min, yr_max, (yr_min, yr_max), label_visibility='collapsed')
-        f = f[(pd.to_numeric(f[year_col], errors="coerce") >= years[0]) &
-              (pd.to_numeric(f[year_col], errors="coerce") <= years[1])]
 
-    # ---------- Dynamic category filters ----------
-    # One multiselect per category column (like your current Team/Pos/Player)
-    cat_selections = {}
-    cat_cols_layout = st.columns(min(4, len(cat_cols))) if len(cat_cols) > 1 else [st]
-    for i, c in enumerate(cat_cols):
-        with cat_cols_layout[i % len(cat_cols_layout)]:
-            opts = sorted(pd.Series(f[c]).dropna().unique().tolist())
-            cat_selections[c] = st.multiselect(c, opts)
+        if pd.api.types.is_datetime64_any_dtype(x_series):
+            x_min, x_max = x_series.min(), x_series.max()
+            x_range = st.slider("", x_min, x_max, (x_min, x_max), label_visibility="collapsed")
+            f = f[(f[year_col] >= x_range[0]) & (f[year_col] <= x_range[1])]
 
-    # Apply category filters
-    for c, vals in cat_selections.items():
-        if vals:
-            f = f[f[c].isin(vals)]
+        elif pd.api.types.is_numeric_dtype(x_series):
+            x_num = pd.to_numeric(x_series, errors="coerce")
+            f[year_col] = x_num
+            vals = x_num.dropna()
+            if vals.empty:
+                st.warning(f"No numeric values for x-axis column '{year_col}'.")
+                return
+            xmin, xmax = float(vals.min()), float(vals.max())
+            x_range = st.slider("", xmin, xmax, (xmin, xmax), label_visibility="collapsed")
+            f = f[(pd.to_numeric(f[year_col], errors="coerce") >= x_range[0]) &
+                (pd.to_numeric(f[year_col], errors="coerce") <= x_range[1])]
 
-    # ---------- Metric selection (single control) ----------
-    sel_metrics = st.multiselect("Metric(s)", metric_cols, default=[metric_cols[0]])
+        else:
+            # Treat as categorical/text
+            opts = sorted(pd.Series(x_series.astype(str)).dropna().unique().tolist())
+            # let user pick which x values to show, and preserve order on the axis
+            x_order = st.multiselect("X values", opts, default=opts)
+            if not x_order:
+                st.info("Select at least one X value.")
+                return
+            f = f[f[year_col].astype(str).isin(x_order)].copy()
+            f[year_col] = f[year_col].astype(str)
+            category_orders[year_col] = x_order
 
-    if not sel_metrics:
-        st.info("Select at least one metric.")
-        return
-    if f.empty:
-        st.warning("No data for the chosen filters.")
-        return
 
-    # ---------- Aggregation controls ----------
-    # Only allow Aggregate On among the chosen category columns; prefer ones with any selection
-    selected_cats = [c for c, v in cat_selections.items() if v]
-    agg_candidates = selected_cats or cat_cols
-    r4c1, r4c2 = st.columns(2)
-    with r4c1:
-        aggregate_on = st.selectbox("Aggregate On", agg_candidates,
-                                    help="Legend/grouping category. Metrics are aggregated across other categories.")
-    with r4c2:
-        aggregate_by = st.selectbox("Aggregate By", ["sum", "average"])
+        # ---------- Dynamic category filters ----------
+        # One multiselect per category column (like your current Team/Pos/Player)
+        cat_selections = {}
+        cat_cols_layout = st.columns(min(4, len(cat_cols))) if len(cat_cols) > 1 else [st]
+        for i, c in enumerate(cat_cols):
+            with cat_cols_layout[i % len(cat_cols_layout)]:
+                opts = sorted(pd.Series(f[c]).dropna().unique().tolist())
+                cat_selections[c] = st.multiselect(c, opts)
+
+        # Apply category filters
+        for c, vals in cat_selections.items():
+            if vals:
+                f = f[f[c].isin(vals)]
+
+        # ---------- Metric selection (single control) ----------
+        sel_metrics = st.multiselect("Metric(s)", metric_cols, default=[metric_cols[0]])
+
+
+        # ---------- Aggregation controls ----------
+        # Only allow Aggregate On among the chosen category columns; prefer ones with any selection
+        selected_cats = [c for c, v in cat_selections.items() if v]
+        agg_candidates = selected_cats or cat_cols
+        r4c1, r4c2 = st.columns(2)
+        with r4c1:
+            aggregate_on = st.selectbox("Aggregate On", agg_candidates,
+                                        help="Legend/grouping category. Metrics are aggregated across other categories.")
+        with r4c2:
+            aggregate_by = st.selectbox("Aggregate By", ["sum", "average"])
 
     # ---------- Type cleanup ----------
     for m in sel_metrics:
@@ -223,8 +246,10 @@ def build_trend_ui(df: pd.DataFrame):
         color="Legend",
         line_dash="Metric",
         markers=True,
-        hover_data=[aggregate_on, "Metric"]
+        hover_data=[aggregate_on, "Metric"],
+        category_orders=category_orders   # <= respects categorical X ordering
     )
+
     # Strip duplicate metric suffix that Plotly adds
     fig.for_each_trace(lambda t: t.update(name=t.name.split(",")[0]))
     fig.update_traces(mode="lines+markers")
