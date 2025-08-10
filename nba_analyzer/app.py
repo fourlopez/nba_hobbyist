@@ -137,37 +137,39 @@ def build_trend_ui(df: pd.DataFrame):
     long["ColorKey"] = long[aggregate_on].astype(str)
 
     # ---------- Colors: one color per aggregate value (metrics vary by dash) ----------
-
-    # First group: blues & oranges (from Plotly + D3)
-    # --- Custom 18-color palette ---
+  
+    # Group 1: Blues & Oranges (alternating)
     first_group = [
         "#1f77b4",  # Medium blue
-        "#08306b",  # Very dark navy
-        "#6baed6",  # Light sky blue
         "#ff7f0e",  # Bright orange
+        "#08306b",  # Very dark navy
         "#a63603",  # Dark burnt orange
+        "#6baed6",  # Light sky blue
         "#fdae6b"   # Light orange
     ]
     
+    # Group 2: Violets & Yellows (alternating)
     second_group = [
         "#54278f",  # Deep violet
-        "#756bb1",  # Medium violet
-        "#dadaeb",  # Light lavender
-        "#b8860b",  # Dark goldenrod
         "#ffd92f",  # Bright yellow
+        "#756bb1",  # Medium violet
+        "#b8860b",  # Dark goldenrod
+        "#dadaeb",  # Light lavender
         "#ffe87c"   # Light yellow
     ]
     
+    # Group 3: Greens & Neutrals (alternating)
     third_group = [
         "#00441b",  # Deep forest green
-        "#238b45",  # Medium green
-        "#a1d99b",  # Light green
         "#7f7f7f",  # Medium gray
+        "#238b45",  # Medium green
         "#bdbdbd",  # Light gray
+        "#a1d99b",  # Light green
         "#f0f0f0"   # Near white
     ]
     
     palette = first_group + second_group + third_group
+
 
     entities = sorted(long["ColorKey"].dropna().unique())
     entity_color = {e: palette[i % len(palette)] for i, e in enumerate(entities)}
